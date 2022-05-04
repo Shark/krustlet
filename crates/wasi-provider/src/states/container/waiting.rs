@@ -24,8 +24,9 @@ pub const ALLOWED_DOMAINS_ANNOTATION_KEY: &str = "alpha.wasi.krustlet.dev/allowe
 fn volume_path_map(
     container: &Container,
     volumes: &HashMap<String, VolumeRef>,
+    pod_working_dir: &PathBuf,
 ) -> anyhow::Result<HashMap<PathBuf, Option<PathBuf>>> {
-    if let Some(volume_mounts) = container.volume_mounts().as_ref() {
+    let mut volumes = if let Some(volume_mounts) = container.volume_mounts().as_ref() {
         // Check for volumes added during the `Resources` State that were not specified in original ContainerSpec
         // Currently, these are only volumes required by device plugins.
         let container_vol_names: Vec<String> =
@@ -76,10 +77,12 @@ fn volume_path_map(
                 })
                 .collect::<anyhow::Result<HashMap<PathBuf, Option<PathBuf>>>>()?,
         );
-        Ok(resource_volumes)
+        resource_volumes
     } else {
-        Ok(HashMap::default())
-    }
+        HashMap::default()
+    };
+    volumes.insert(pod_working_dir.clone(), Some(PathBuf::from("/work")));
+    Ok(volumes)
 }
 
 /// The container is starting.
@@ -129,7 +132,7 @@ impl State<ContainerState> for Waiting {
                     );
                 }
             };
-            let container_volumes = match volume_path_map(&container, &run_context.volumes) {
+            let container_volumes = match volume_path_map(&container, &run_context.volumes, &state.pod_working_dir) {
                 Ok(volumes) => volumes,
                 Err(e) => {
                     return Transition::next(

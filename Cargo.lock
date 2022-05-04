@@ -3823,6 +3823,7 @@ dependencies = [
  "cap-std",
  "chrono",
  "futures",
+ "json-patch",
  "k8s-openapi",
  "krator",
  "kube",

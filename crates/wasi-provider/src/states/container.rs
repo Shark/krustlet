@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use crate::ModuleRunContext;
 use crate::ProviderState;
 use krator::{ObjectState, SharedState};
@@ -12,6 +13,7 @@ pub(crate) struct ContainerState {
     pod: Pod,
     container_key: ContainerKey,
     run_context: SharedState<ModuleRunContext>,
+    pod_working_dir: PathBuf,
 }
 
 impl ContainerState {
@@ -19,11 +21,13 @@ impl ContainerState {
         pod: Pod,
         container_key: ContainerKey,
         run_context: SharedState<ModuleRunContext>,
+        pod_working_dir: PathBuf,
     ) -> Self {
         ContainerState {
             pod,
             container_key,
             run_context,
+            pod_working_dir,
         }
     }
 }

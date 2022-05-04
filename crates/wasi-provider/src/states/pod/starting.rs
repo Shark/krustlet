@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use tracing::{info, instrument};
@@ -46,6 +47,7 @@ impl State<PodState> for Starting {
                 pod.clone(),
                 container_key.clone(),
                 Arc::clone(&pod_state.run_context),
+                PathBuf::from(pod_state.pod_working_dir.path()),
             );
             let task_provider = Arc::clone(&provider_state);
             let task_tx = tx.clone();

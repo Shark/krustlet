@@ -1,4 +1,8 @@
+use std::fs;
+use std::path::PathBuf;
 use std::sync::Arc;
+use k8s_openapi::api::core::v1::ConfigMap;
+use kube::Api;
 
 use tracing::{error, info, instrument};
 
@@ -42,6 +46,30 @@ impl State<PodState> for Initializing {
             provider_state.client()
         };
 
+        {
+            let api: Api<ConfigMap> = Api::namespaced(client.clone(), pod.namespace());
+            let config_map = match api.get(pod.name()).await {
+                Ok(config_map) => Some(config_map),
+                Err(_why) => None,
+            };
+            let input_json: Option<String> = match config_map {
+                Some(config_map) => match config_map.data {
+                    Some(data) => match data.get("input.json") {
+                        Some(input_json) => Some(input_json.to_owned()),
+                        None => None,
+                    },
+                    None => None,
+                },
+                None => None,
+            };
+            if let Some(input_json) = input_json {
+                match fs::write(pod_state.pod_working_dir.path().join("input.json"), input_json) {
+                    Ok(_) => (),
+                    Err(why) => return Transition::Complete(Err(why.into())),
+                }
+            }
+        }
+
         for init_container in pod.init_containers() {
             info!(
                 container_name = init_container.name(),
@@ -58,6 +86,7 @@ impl State<PodState> for Initializing {
                 pod.clone(),
                 container_key.clone(),
                 Arc::clone(&pod_state.run_context),
+                PathBuf::from(pod_state.pod_working_dir.path()),
             );
 
             match run_to_completion(
