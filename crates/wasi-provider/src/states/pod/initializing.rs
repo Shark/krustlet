@@ -1,4 +1,3 @@
-use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 use k8s_openapi::api::core::v1::ConfigMap;
@@ -63,7 +62,11 @@ impl State<PodState> for Initializing {
                 None => None,
             };
             if let Some(input_json) = input_json {
-                match fs::write(pod_state.pod_working_dir.path().join("input.json"), input_json) {
+                let invocation = match serde_json::from_str(&input_json) {
+                    Ok(i) => i,
+                    Err(why) => return Transition::Complete(Err(why.into()))
+                };
+                match pod_state.pod_working_dir.set_input(&invocation) {
                     Ok(_) => (),
                     Err(why) => return Transition::Complete(Err(why.into())),
                 }

@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use krator::{ObjectState, SharedState};
-use tempfile::TempDir;
 use kubelet::backoff::BackoffStrategy;
 use kubelet::backoff::ExponentialBackoffStrategy;
 use kubelet::pod::Pod;
@@ -12,6 +11,7 @@ use kubelet::pod::Status;
 use kubelet::state::common::{BackoffSequence, GenericPodState, ThresholdTrigger};
 use tokio::sync::RwLock;
 use tracing::error;
+use workflow_model::host::WorkingDir;
 
 use crate::ModuleRunContext;
 use crate::ProviderState;
@@ -28,7 +28,7 @@ pub struct PodState {
     errors: usize,
     image_pull_backoff_strategy: ExponentialBackoffStrategy,
     pub(crate) crash_loop_backoff_strategy: ExponentialBackoffStrategy,
-    pod_working_dir: TempDir,
+    pod_working_dir: WorkingDir,
 }
 
 #[async_trait]
@@ -62,7 +62,7 @@ impl PodState {
             env_vars: Default::default(),
         };
         let key = PodKey::from(pod);
-        let pod_working_dir = TempDir::new().expect("create temp dir");
+        let pod_working_dir = WorkingDir::try_new().unwrap();
         PodState {
             key,
             pod_working_dir,
