@@ -3,7 +3,9 @@ use std::sync::Arc;
 use k8s_openapi::api::core::v1::ConfigMap;
 use kube::Api;
 
-use tracing::{error, info, instrument};
+use tracing::{error, info, instrument, warn};
+use workflow_model::host::artifacts::ArtifactManager;
+use workflow_model::model::PluginInvocation;
 
 use kubelet::backoff::BackoffStrategy;
 use kubelet::container::state::run_to_completion;
@@ -51,8 +53,8 @@ impl State<PodState> for Initializing {
                 Ok(config_map) => Some(config_map),
                 Err(_why) => None,
             };
-            let input_json: Option<String> = match config_map {
-                Some(config_map) => match config_map.data {
+            let input_json: Option<String> = match &config_map {
+                Some(config_map) => match &config_map.data {
                     Some(data) => match data.get("input.json") {
                         Some(input_json) => Some(input_json.to_owned()),
                         None => None,
@@ -61,14 +63,48 @@ impl State<PodState> for Initializing {
                 },
                 None => None,
             };
+            let mut invocation: Option<PluginInvocation> = None;
             if let Some(input_json) = input_json {
-                let invocation = match serde_json::from_str(&input_json) {
-                    Ok(i) => i,
+                invocation = match serde_json::from_str(&input_json) {
+                    Ok(i) => Some(i),
                     Err(why) => return Transition::Complete(Err(why.into()))
                 };
+            }
+            if let Some(invocation) = invocation {
+                pod_state.workflow_name = Some(invocation.workflow_name.to_owned());
                 match pod_state.pod_working_dir.set_input(&invocation) {
                     Ok(_) => (),
                     Err(why) => return Transition::Complete(Err(why.into())),
+                }
+                if invocation.artifacts.len() > 0 {
+                    pod_state.artifact_manager = match config_map {
+                        Some(config_map) => match config_map.data {
+                            Some(data) => match data.get("artifact-repo-config.json") {
+                                Some(input_json) => {
+                                    match serde_json::from_str(input_json) {
+                                        Ok(cfg) => match ArtifactManager::try_new(cfg) {
+                                            Ok(manager) => Some(manager),
+                                            Err(why) => return Transition::Complete(Err(why.into())),
+                                        },
+                                        Err(why) => return Transition::Complete(Err(why.into()))
+                                    }
+                                }
+                                None => None,
+                            },
+                            None => None,
+                        },
+                        None => None,
+                    };
+                    if let Some(artifact_manager) = &pod_state.artifact_manager {
+                        for artifact in invocation.artifacts {
+                            match artifact_manager.download(&pod_state.pod_working_dir, &artifact).await {
+                                Ok(_) => (),
+                                Err(why) => return Transition::Complete(Err(why.into())),
+                            }
+                        }
+                    } else {
+                        warn!("Workflow invocation has artifacts, but could not create ArtifactManager");
+                    }
                 }
             }
         }

@@ -180,7 +180,7 @@ impl Provider for WasiProvider {
     }
 
     async fn initialize_pod_state(&self, pod: &Pod) -> anyhow::Result<Self::PodState> {
-        Ok(PodState::new(pod))
+        Ok(PodState::new(pod).await)
     }
 
     async fn logs(

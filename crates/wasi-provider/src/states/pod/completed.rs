@@ -7,6 +7,8 @@ use anyhow::anyhow;
 use k8s_openapi::api::core::v1::ConfigMap;
 use kube::Api;
 use kube::api::{Patch, PatchParams};
+use tracing::warn;
+use workflow_model::model::ArtifactRef;
 
 /// Pod was deleted.
 #[derive(Default, Debug)]
@@ -20,15 +22,32 @@ impl State<PodState> for Completed {
         pod_state: &mut PodState,
         pod: Manifest<Pod>,
     ) -> Transition<PodState> {
-        let result = match pod_state.pod_working_dir.result() {
+        let mut result = match pod_state.pod_working_dir.result() {
             Ok(r) => r,
             Err(why) => return Transition::Complete(Err(anyhow!(why).context("Error reading module result from working dir"))),
         };
+        tracing::debug!(?result, "Retrieved result");
+        if result.outputs.artifacts.len() > 0 {
+            if pod_state.artifact_manager.is_none() || pod_state.workflow_name.is_none() {
+                warn!("Result has {} artifacts but ArtifactManager or WorkflowName is not initialized, deleting artifacts", result.outputs.artifacts.len());
+                result.outputs.artifacts = vec![];
+            } else {
+                let mut uploaded_artifacts: Vec<ArtifactRef> = vec![];
+                for artifact in &result.outputs.artifacts {
+                    match pod_state.artifact_manager.as_ref().unwrap().upload(&pod_state.pod_working_dir, pod_state.workflow_name.as_ref().unwrap(), artifact).await {
+                        Ok(aref) => {
+                            uploaded_artifacts.push(aref);
+                        },
+                        Err(why) => return Transition::Complete(Err(why.into())),
+                    }
+                }
+                result.outputs.artifacts = uploaded_artifacts;
+            }
+        }
         let result = match serde_json::to_string(&result) {
             Ok(r) => r,
             Err(why) => return Transition::Complete(Err(why.into())),
         };
-        tracing::debug!(?result, "Retrieved result");
         let client = {
             let provider_state = provider_state.read().await;
             provider_state.client()

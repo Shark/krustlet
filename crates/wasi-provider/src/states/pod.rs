@@ -11,6 +11,7 @@ use kubelet::pod::Status;
 use kubelet::state::common::{BackoffSequence, GenericPodState, ThresholdTrigger};
 use tokio::sync::RwLock;
 use tracing::error;
+use workflow_model::host::artifacts::ArtifactManager;
 use workflow_model::host::WorkingDir;
 
 use crate::ModuleRunContext;
@@ -29,6 +30,8 @@ pub struct PodState {
     image_pull_backoff_strategy: ExponentialBackoffStrategy,
     pub(crate) crash_loop_backoff_strategy: ExponentialBackoffStrategy,
     pod_working_dir: WorkingDir,
+    artifact_manager: Option<ArtifactManager>,
+    workflow_name: Option<String>,
 }
 
 #[async_trait]
@@ -55,17 +58,19 @@ impl ObjectState for PodState {
 }
 
 impl PodState {
-    pub fn new(pod: &Pod) -> Self {
+    pub async fn new(pod: &Pod) -> Self {
         let run_context = ModuleRunContext {
             modules: Default::default(),
             volumes: Default::default(),
             env_vars: Default::default(),
         };
         let key = PodKey::from(pod);
-        let pod_working_dir = WorkingDir::try_new().unwrap();
+        let pod_working_dir = WorkingDir::try_new().await.unwrap();
         PodState {
             key,
             pod_working_dir,
+            artifact_manager: None,
+            workflow_name: None,
             run_context: Arc::new(RwLock::new(run_context)),
             errors: 0,
             image_pull_backoff_strategy: ExponentialBackoffStrategy::default(),
