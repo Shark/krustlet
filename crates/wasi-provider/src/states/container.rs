@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use crate::ModuleRunContext;
 use crate::ProviderState;
 use krator::{ObjectState, SharedState};
+use tracing::Span;
 use kubelet::container::{Container, ContainerKey, Status};
 use kubelet::pod::Pod;
 
@@ -14,6 +15,7 @@ pub(crate) struct ContainerState {
     container_key: ContainerKey,
     run_context: SharedState<ModuleRunContext>,
     pod_working_dir: PathBuf,
+    parent_span: Span,
 }
 
 impl ContainerState {
@@ -22,12 +24,14 @@ impl ContainerState {
         container_key: ContainerKey,
         run_context: SharedState<ModuleRunContext>,
         pod_working_dir: PathBuf,
+        parent_span: Span,
     ) -> Self {
         ContainerState {
             pod,
             container_key,
             run_context,
             pod_working_dir,
+            parent_span,
         }
     }
 }

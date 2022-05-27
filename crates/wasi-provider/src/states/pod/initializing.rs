@@ -1,9 +1,11 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use k8s_openapi::api::core::v1::ConfigMap;
 use kube::Api;
 
 use tracing::{error, info, instrument, warn};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 use workflow_model::host::artifacts::ArtifactManager;
 use workflow_model::model::PluginInvocation;
 
@@ -27,6 +29,7 @@ pub struct Initializing;
 #[async_trait::async_trait]
 impl State<PodState> for Initializing {
     #[instrument(
+        name = "pod.initializing",
         level = "info",
         skip(self, provider_state, pod_state, pod),
         fields(pod_name)
@@ -53,6 +56,24 @@ impl State<PodState> for Initializing {
                 Ok(config_map) => Some(config_map),
                 Err(_why) => None,
             };
+            let opentelemetry: Option<HashMap<String,String>> = match &config_map {
+                Some(config_map) => match &config_map.data {
+                    Some(data) => match data.get("opentelemetry.json") {
+                        Some(opentelemetry_json) => match serde_json::from_str(opentelemetry_json) {
+                            Ok(opentelemetry) => opentelemetry,
+                            Err(why) => return Transition::Complete(Err(why.into())),
+                        },
+                        None => None,
+                    },
+                    None => None,
+                },
+                None => None,
+            };
+            if let Some(opentelemetry) = opentelemetry {
+                let cx = opentelemetry::global::get_text_map_propagator(|propagator| propagator.extract(&opentelemetry));
+                tracing::Span::current().set_parent(cx);
+                pod_state.parent_context = Some(tracing::Span::current().context());
+            }
             let input_json: Option<String> = match &config_map {
                 Some(config_map) => match &config_map.data {
                     Some(data) => match data.get("input.json") {
@@ -126,6 +147,7 @@ impl State<PodState> for Initializing {
                 container_key.clone(),
                 Arc::clone(&pod_state.run_context),
                 PathBuf::from(pod_state.pod_working_dir.path()),
+                tracing::Span::current().clone(),
             );
 
             match run_to_completion(

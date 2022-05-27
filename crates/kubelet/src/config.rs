@@ -66,6 +66,8 @@ pub struct Config {
     /// device plugins lives. This is also where device plugins
     /// should host their services.
     pub device_plugins_dir: PathBuf,
+    /// Whether to enable sending OpenTelemetry traces
+    pub enable_telemetry: bool,
 }
 /// The configuration for the Kubelet server.
 #[derive(Clone, Debug)]
@@ -127,6 +129,8 @@ struct ConfigBuilder {
     pub plugins_dir: Option<PathBuf>,
     #[serde(default, rename = "devicePluginsDir")]
     pub device_plugins_dir: Option<PathBuf>,
+    #[serde(default, rename = "enableTelemetry")]
+    pub enable_telemetry: Option<bool>,
 }
 
 struct ConfigBuilderFallbacks {
@@ -165,6 +169,7 @@ impl Config {
             insecure_registries: None,
             plugins_dir,
             device_plugins_dir,
+            enable_telemetry: false,
             server_config: ServerConfig {
                 addr: match preferred_ip_family {
                     IpAddr::V4(_) => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
@@ -293,6 +298,7 @@ impl ConfigBuilder {
             server_port: ok_result_of(opts.port),
             server_tls_cert_file: opts.cert_file,
             server_tls_private_key_file: opts.private_key_file,
+            enable_telemetry: opts.enable_telemetry,
         }
     }
 
@@ -331,6 +337,7 @@ impl ConfigBuilder {
             server_tls_private_key_file: other
                 .server_tls_private_key_file
                 .or(self.server_tls_private_key_file),
+            enable_telemetry: other.enable_telemetry,
         }
     }
 
@@ -390,6 +397,7 @@ impl ConfigBuilder {
                 addr: server_addr,
                 port: server_port,
             },
+            enable_telemetry: self.enable_telemetry.unwrap_or(false),
         })
     }
 }
@@ -541,6 +549,13 @@ pub struct Opts {
         help = "Registries that should be accessed over HTTP instead of HTTPS (comma separated)"
     )]
     insecure_registries: Option<String>,
+
+    #[structopt(
+        long = "enable-telemetry",
+        env = "KRUSTLET_ENABLE_TELEMETRY",
+        help = "Whether to enable sending OpenTelemetry traces"
+    )]
+    enable_telemetry: Option<bool>,
 }
 
 fn default_hostname() -> anyhow::Result<String> {

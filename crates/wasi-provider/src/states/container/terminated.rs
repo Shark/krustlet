@@ -21,7 +21,13 @@ impl Terminated {
 
 #[async_trait::async_trait]
 impl State<ContainerState> for Terminated {
-    #[instrument(level = "info", skip(self, _shared_state, _state, container), fields(pod_name = _state.pod.name(), container_name))]
+    #[instrument(
+        name = "container.terminated",
+        level = "info",
+        skip(self, _shared_state, _state, container),
+        fields(pod_name = _state.pod.name(), container_name),
+        parent = &_state.parent_span
+    )]
     async fn next(
         self: Box<Self>,
         _shared_state: SharedState<ProviderState>,

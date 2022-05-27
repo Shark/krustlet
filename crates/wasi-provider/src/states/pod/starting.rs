@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use tracing::{info, instrument};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use kubelet::container::state::run_to_completion;
 use kubelet::container::ContainerKey;
@@ -22,6 +23,7 @@ pub(crate) struct Starting;
 #[async_trait::async_trait]
 impl State<PodState> for Starting {
     #[instrument(
+        name = "pod.starting"
         level = "info",
         skip(self, provider_state, pod_state, pod),
         fields(pod_name)
@@ -32,6 +34,9 @@ impl State<PodState> for Starting {
         pod_state: &mut PodState,
         pod: Manifest<Pod>,
     ) -> Transition<PodState> {
+        if let Some(parent_context) = &pod_state.parent_context {
+            tracing::Span::current().set_parent(parent_context.to_owned());
+        }
         let pod_rx = pod.clone();
         let pod = pod.latest();
 
@@ -48,6 +53,7 @@ impl State<PodState> for Starting {
                 container_key.clone(),
                 Arc::clone(&pod_state.run_context),
                 PathBuf::from(pod_state.pod_working_dir.path()),
+                tracing::Span::current().clone(),
             );
             let task_provider = Arc::clone(&provider_state);
             let task_tx = tx.clone();

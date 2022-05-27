@@ -20,7 +20,12 @@ impl Running {
 
 #[async_trait::async_trait]
 impl State<ContainerState> for Running {
-    #[instrument(level = "info", skip(self, _shared_state, _state, _container))]
+    #[instrument(
+        name = "container.running",
+        level = "info",
+        skip(self, _shared_state, _state, _container),
+        parent = &_state.parent_span
+    )]
     async fn next(
         mut self: Box<Self>,
         _shared_state: SharedState<ProviderState>,

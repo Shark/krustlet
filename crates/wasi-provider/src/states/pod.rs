@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use krator::{ObjectState, SharedState};
+use opentelemetry::Context;
 use kubelet::backoff::BackoffStrategy;
 use kubelet::backoff::ExponentialBackoffStrategy;
 use kubelet::pod::Pod;
@@ -32,6 +33,7 @@ pub struct PodState {
     pod_working_dir: WorkingDir,
     artifact_manager: Option<ArtifactManager>,
     workflow_name: Option<String>,
+    parent_context: Option<Context>,
 }
 
 #[async_trait]
@@ -71,6 +73,7 @@ impl PodState {
             pod_working_dir,
             artifact_manager: None,
             workflow_name: None,
+            parent_context: None,
             run_context: Arc::new(RwLock::new(run_context)),
             errors: 0,
             image_pull_backoff_strategy: ExponentialBackoffStrategy::default(),

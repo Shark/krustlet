@@ -129,6 +129,7 @@ impl WasiRuntime {
         })
     }
 
+    #[tracing::instrument(name = "wasi-runtime.start", skip(self))]
     pub async fn start(&self) -> anyhow::Result<ContainerHandle<Runtime, HandleFactory>> {
         let temp = self.output.clone();
         // Because a reopen is blocking, run in a blocking task to get new
@@ -157,7 +158,7 @@ impl WasiRuntime {
 
     // Spawns a running wasmtime instance with the given context and status
     // channel.
-    #[instrument(level = "info", skip(self, output_write), fields(name = %self.name))]
+    #[instrument(name = "wasi-runtime.spawn_wasmtime", level = "info", skip(self, output_write), fields(name = %self.name))]
     async fn spawn_wasmtime(
         &self,
         output_write: tokio::fs::File,
@@ -338,7 +339,7 @@ impl WasiRuntime {
     }
 }
 
-#[instrument(level = "info", skip(sender, status))]
+#[instrument(level = "debug", skip(sender, status))]
 fn send(sender: &Sender<Status>, name: &str, status: Status) {
     match sender.blocking_send(status) {
         Err(e) => warn!(error = %e, "error sending wasi status"),

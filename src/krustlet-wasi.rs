@@ -6,6 +6,14 @@ use kubelet::store::oci::FileStore;
 use kubelet::Kubelet;
 use std::convert::TryFrom;
 use std::sync::Arc;
+use anyhow::{anyhow, Context};
+use tracing_opentelemetry::OpenTelemetryLayer;
+use tracing_subscriber::{
+    filter::EnvFilter,
+    layer::SubscriberExt,
+    prelude::*,
+};
+use tracing_subscriber::filter::LevelFilter;
 use wasi_provider::WasiProvider;
 
 #[tokio::main(flavor = "multi_thread")]
@@ -14,10 +22,26 @@ async fn main() -> anyhow::Result<()> {
     // a new Kubelet, all you need to implement is a provider.
     let config = Config::new_from_file_and_flags(env!("CARGO_PKG_VERSION"), None);
 
+    let telemetry: Option<OpenTelemetryLayer<_, _>> = match config.enable_telemetry {
+        true => {
+            let telemetry = telemetry().context("Setting up telemetry")?;
+            opentelemetry::global::set_text_map_propagator(opentelemetry_jaeger::Propagator::new());
+            Some(telemetry)
+        },
+        false => None,
+    };
+
     // Initialize the logger
-    tracing_subscriber::fmt()
-        .with_writer(std::io::stderr)
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+    tracing_subscriber::registry()
+        .with(telemetry)
+        .with(EnvFilter::builder()
+            .with_default_directive(LevelFilter::INFO.into())
+            .from_env_lossy())
+        .with(
+            tracing_subscriber::fmt::layer()
+                .compact()
+                .with_writer(std::io::stderr)
+        )
         .init();
 
     let kubeconfig = kubelet::bootstrap(&config, &config.bootstrap_file, notify_bootstrap).await?;
@@ -57,4 +81,19 @@ fn make_store(config: &Config) -> Arc<dyn kubelet::store::Store + Send + Sync> {
 
 fn notify_bootstrap(message: String) {
     println!("BOOTSTRAP: {}", message);
+}
+
+fn telemetry() -> anyhow::Result<
+    OpenTelemetryLayer<
+        tracing_subscriber::Registry,
+        opentelemetry::sdk::trace::Tracer,
+    >,
+> {
+    let tracer = opentelemetry_jaeger::new_pipeline()
+        .with_service_name("krustlet")
+        .install_simple()
+        .map_err(|err| anyhow!(err).context("opentelemetry_jaeger setup failed"))?;
+
+    // Create a tracing layer with the configured tracer
+    Ok(tracing_opentelemetry::layer().with_tracer(tracer))
 }

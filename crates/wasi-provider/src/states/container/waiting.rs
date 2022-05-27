@@ -93,9 +93,11 @@ pub struct Waiting;
 #[async_trait::async_trait]
 impl State<ContainerState> for Waiting {
     #[instrument(
+        name = "container.waiting"
         level = "info",
         skip(self, shared, state, container),
-        fields(pod_name = state.pod.name(), container_name)
+        fields(pod_name = state.pod.name(), container_name),
+        parent = &state.parent_span
     )]
     async fn next(
         self: Box<Self>,
