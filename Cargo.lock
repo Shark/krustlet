@@ -1734,6 +1734,7 @@ dependencies = [
  "uuid",
  "version-sync",
  "warp",
+ "wasmtime",
  "winapi 0.2.8",
  "ws2_32-sys",
 ]

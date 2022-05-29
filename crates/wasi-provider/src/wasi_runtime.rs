@@ -8,7 +8,7 @@ use tempfile::NamedTempFile;
 use tokio::sync::mpsc::Sender;
 use tokio::task::JoinHandle;
 use wasi_cap_std_sync::WasiCtxBuilder;
-use wasmtime::{InterruptHandle, Linker};
+use wasmtime::{InterruptHandle, Linker, Module};
 
 use kubelet::container::Handle as ContainerHandle;
 use kubelet::container::Status;
@@ -214,7 +214,7 @@ impl WasiRuntime {
 
         let mut linker = Linker::new(&engine);
 
-        let module = match wasmtime::Module::new(&engine, &data.module_data) {
+        let module = match unsafe { Module::deserialize(&engine, &data.module_data) } {
             // We can't map errors here or it moves the send channel, so we
             // do it in a match
             Ok(m) => m,

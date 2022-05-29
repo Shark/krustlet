@@ -2,6 +2,7 @@ use crate::store::Storer;
 use oci_distribution::client::ImageData;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use anyhow::Context;
 
 use async_trait::async_trait;
 use oci_distribution::Reference;
@@ -89,7 +90,8 @@ impl Storer for FileStorer {
         if image_data.layers.is_empty() {
             return Err(anyhow::anyhow!("No module layer present in image data"));
         }
-        tokio::fs::write(&module_path, &image_data.layers[0].data).await?;
+        let precompiled_data = precompile_wasm(&image_data.layers[0].data)?;
+        tokio::fs::write(&module_path, &precompiled_data).await?;
         if let Some(d) = image_data.digest {
             tokio::fs::write(&digest_path, d).await?;
         }
@@ -105,6 +107,13 @@ impl Storer for FileStorer {
         let path = self.digest_file_path(image_ref);
         path.exists() && file_content_is(path, digest).await
     }
+}
+
+fn precompile_wasm(img: &[u8]) -> anyhow::Result<Vec<u8>> {
+    let mut config = wasmtime::Config::new();
+    config.interruptable(true);
+    let engine = wasmtime::Engine::new(&config)?;
+    Ok(engine.precompile_module(img).context("Precompiling Wasm module")?)
 }
 
 impl<C: Client + Send> Clone for FileStore<C> {

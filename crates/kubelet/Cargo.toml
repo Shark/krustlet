@@ -76,6 +76,7 @@ tracing-futures = "0.2"
 url = "2.1"
 uuid = {version = "0.8.1", features = ["v4"]}
 warp = {version = "0.3", features = ['tls']}
+wasmtime = "0.30"
 
 [target.'cfg(target_family = "windows")'.dependencies]
 iovec = "0.1.2"
