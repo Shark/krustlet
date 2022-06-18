@@ -46,7 +46,7 @@ wat = "1.0.38"
 wasi-experimental-http-wasmtime = "0.6.0"
 json-patch = "0.2.6"
 k8s-openapi = {version = "0.13", default-features = false, features = ["v1_22", "api"]}
-workflow-model = { git = "https://github.com/Shark/wasm-workflows-plugin", rev = "a3b6fd73d76d23915191f8849d00edb1d427e97f", features = ["host"] }
+workflow-model = { git = "https://github.com/Shark/wasm-workflows-plugin", rev = "de01a836041b09f9322cc1e3243d890fa8b6b547", features = ["host"] }
 
 [dev-dependencies]
 oci-distribution = "0.8"
